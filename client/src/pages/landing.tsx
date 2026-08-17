@@ -16,6 +16,8 @@ import {
   X,
   TrendingDown,
 } from "lucide-react";
+import { motion, useInView, Variants } from "framer-motion";
+import { useRef } from "react";
 
 function LogoMark({ size = 28, color = "#111827" }: { size?: number; color?: string }) {
   return (
@@ -25,6 +27,96 @@ function LogoMark({ size = 28, color = "#111827" }: { size?: number; color?: str
     </svg>
   );
 }
+
+// ─── Animation helpers ────────────────────────────────────────────────────────
+
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 28 },
+  visible: { opacity: 1, y: 0 },
+};
+
+const fadeIn: Variants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1 },
+};
+
+const staggerContainer: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.1 } },
+};
+
+const staggerContainerFast: Variants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.07 } },
+};
+
+/** Wraps children with a scroll-triggered fade-up animation */
+function FadeUp({
+  children,
+  className,
+  delay = 0,
+  once = true,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  delay?: number;
+  once?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once, margin: "-60px 0px" });
+  return (
+    <motion.div
+      ref={ref}
+      variants={fadeUp}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1], delay }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Stagger container that triggers when scrolled into view */
+function StaggerFadeUp({
+  children,
+  className,
+  fast = false,
+}: {
+  children: React.ReactNode;
+  className?: string;
+  fast?: boolean;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px 0px" });
+  return (
+    <motion.div
+      ref={ref}
+      variants={fast ? staggerContainerFast : staggerContainer}
+      initial="hidden"
+      animate={inView ? "visible" : "hidden"}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+/** Individual stagger child — use inside StaggerFadeUp */
+function StaggerItem({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <motion.div
+      variants={fadeUp}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// ─── Data ─────────────────────────────────────────────────────────────────────
 
 const navLinks = [
   { label: "Features", href: "#features" },
@@ -156,17 +248,14 @@ const PLAN_PRICE_OVERRIDES: Record<string, Record<string, { price: string; examp
   },
 };
 
-// Real published per-IC/month prices for the pricing calculator, sourced
-// from the same localized numbers as PLAN_PRICE_OVERRIDES above (not a
-// currency-converted USD figure). Deel doesn't publish localized pricing —
-// it bills contractor-of-record customers in USD regardless of region — so
-// the calculator only ever shows Deel's cost in USD.
 const CALCULATOR_CURRENCIES: Record<string, { symbol: string; label: string; axleProUnit: number }> = {
   USD: { symbol: "$", label: "USD", axleProUnit: 14 },
   NGN: { symbol: "₦", label: "NGN", axleProUnit: 14000 },
   EUR: { symbol: "€", label: "EUR", axleProUnit: 13 },
 };
 const DEEL_USD_UNIT = 49;
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function LandingPage() {
   const [, setLocation] = useLocation();
@@ -181,8 +270,6 @@ export default function LandingPage() {
       .then((data) => {
         if (data?.currency) {
           setDetectedCurrency(data.currency);
-          // Only auto-apply the detected currency to the calculator before
-          // the visitor has picked one themselves.
           if (!calculatorCurrencyTouched && CALCULATOR_CURRENCIES[data.currency]) {
             setCalculatorCurrency(data.currency);
           }
@@ -203,8 +290,14 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white text-gray-900">
-      {/* Nav */}
-      <header className="h-16 bg-white border-b border-gray-100 sticky top-0 z-50">
+
+      {/* ── Nav ────────────────────────────────────────────────────────────── */}
+      <motion.header
+        initial={{ opacity: 0, y: -12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className="h-16 bg-white border-b border-gray-100 sticky top-0 z-50"
+      >
         <div className="max-w-7xl mx-auto h-full px-6 lg:px-12 flex items-center">
           <a href="/" className="flex items-center gap-2.5 mr-12 no-underline">
             <LogoMark size={28} color="#111827" />
@@ -250,8 +343,9 @@ export default function LandingPage() {
             </Button>
           </div>
         </div>
-      </header>
-      {/* Hero */}
+      </motion.header>
+
+      {/* ── Hero ───────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-white py-20 sm:py-24">
         <div
           className="absolute inset-0 pointer-events-none opacity-[0.045]"
@@ -261,24 +355,44 @@ export default function LandingPage() {
 
         <div className="relative max-w-7xl mx-auto px-6 lg:px-12 grid grid-cols-1 lg:grid-cols-2 gap-14 lg:gap-16 items-center">
           {/* Left: copy */}
-          <div>
-            <div className="inline-flex items-center gap-2 border border-gray-200 rounded-full pl-3.5 pr-3 py-1.5 bg-white shadow-sm mb-7">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            animate="visible"
+          >
+            <motion.div
+              variants={fadeUp}
+              transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+              className="inline-flex items-center gap-2 border border-gray-200 rounded-full pl-3.5 pr-3 py-1.5 bg-white shadow-sm mb-7"
+            >
               <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0" />
               <span className="text-gray-700 text-[12.5px] font-medium">New, expense management is live</span>
               <ChevronRight className="w-3 h-3 text-gray-400" />
-            </div>
+            </motion.div>
 
-            <h1 className="font-serif font-normal text-gray-900 text-5xl sm:text-6xl leading-[1.08] tracking-tight mb-6">
+            <motion.h1
+              variants={fadeUp}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="font-serif font-normal text-gray-900 text-5xl sm:text-6xl leading-[1.08] tracking-tight mb-6"
+            >
               Pure contractor ops.
               <br />
               <em>Not EOR. Not payroll.</em>
-            </h1>
+            </motion.h1>
 
-            <p className="text-gray-500 text-lg leading-relaxed mb-8 max-w-md">
+            <motion.p
+              variants={fadeUp}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="text-gray-500 text-lg leading-relaxed mb-8 max-w-md"
+            >
               Timesheets, invoices, leave, and evaluations — built for teams that manage contractors directly. No EOR overhead, no implementation weeks.
-            </p>
+            </motion.p>
 
-            <div className="flex flex-wrap items-center gap-3 mb-5">
+            <motion.div
+              variants={fadeUp}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="flex flex-wrap items-center gap-3 mb-5"
+            >
               <Button
                 size="lg"
                 onClick={() => {
@@ -296,12 +410,24 @@ export default function LandingPage() {
               <Button size="lg" variant="outline" onClick={scrollToHowItWorks} data-testid="button-hero-demo">
                 See how it works
               </Button>
-            </div>
-            <p className="text-gray-400 text-xs">7-day free trial · No credit card required · Up to 3 contractors during the trial.</p>
-          </div>
+            </motion.div>
+
+            <motion.p
+              variants={fadeUp}
+              transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+              className="text-gray-400 text-xs"
+            >
+              7-day free trial · No credit card required · Up to 3 contractors during the trial.
+            </motion.p>
+          </motion.div>
 
           {/* Right: app screenshot mockup */}
-          <div className="relative">
+          <motion.div
+            className="relative"
+            initial={{ opacity: 0, y: 32, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.75, ease: [0.22, 1, 0.36, 1], delay: 0.25 }}
+          >
             <div className="rounded-2xl overflow-hidden shadow-2xl ring-1 ring-gray-200">
               {/* Browser chrome */}
               <div className="h-9 bg-gray-50 border-b border-gray-200 flex items-center px-3.5 gap-2">
@@ -387,32 +513,36 @@ export default function LandingPage() {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         </div>
       </section>
-      {/* Social proof strip */}
-      <section className="bg-gray-50 border-y border-gray-100 py-5">
-        <div className="max-w-7xl mx-auto px-6 lg:px-12 flex flex-wrap items-center gap-x-10 gap-y-2">
-          <span className="text-gray-400 text-xs font-medium whitespace-nowrap">Built for teams that run on contractors</span>
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
-            {[
-              { icon: Clock, label: "Timesheets" },
-              { icon: FileText, label: "Invoices" },
-              { icon: Calendar, label: "Leave tracking" },
-              { icon: Award, label: "Evaluations" },
-            ].map(({ icon: Icon, label }) => (
-              <span key={label} className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
-                <Icon className="w-3.5 h-3.5 text-primary" strokeWidth={1.5} />
-                {label}
-              </span>
-            ))}
+
+      {/* ── Social proof strip ─────────────────────────────────────────────── */}
+      <FadeUp>
+        <section className="bg-gray-50 border-y border-gray-100 py-5">
+          <div className="max-w-7xl mx-auto px-6 lg:px-12 flex flex-wrap items-center gap-x-10 gap-y-2">
+            <span className="text-gray-400 text-xs font-medium whitespace-nowrap">Built for teams that run on contractors</span>
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-2">
+              {[
+                { icon: Clock, label: "Timesheets" },
+                { icon: FileText, label: "Invoices" },
+                { icon: Calendar, label: "Leave tracking" },
+                { icon: Award, label: "Evaluations" },
+              ].map(({ icon: Icon, label }) => (
+                <span key={label} className="flex items-center gap-1.5 text-gray-400 text-xs font-medium">
+                  <Icon className="w-3.5 h-3.5 text-primary" strokeWidth={1.5} />
+                  {label}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      </section>
-      {/* Features */}
+        </section>
+      </FadeUp>
+
+      {/* ── Features ───────────────────────────────────────────────────────── */}
       <section id="features" className="bg-white py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
-          <div className="text-center mb-14">
+          <FadeUp className="text-center mb-14">
             <div className="inline-block bg-emerald-50 text-primary text-[11px] font-semibold px-3 py-1 rounded-full mb-3.5 tracking-wide">
               FEATURES
             </div>
@@ -422,23 +552,35 @@ export default function LandingPage() {
             <p className="text-gray-500 text-lg max-w-xl mx-auto leading-relaxed">
               From first timesheet to final payment, Axle handles the operational layer so your contractors can focus on the work.
             </p>
-          </div>
+          </FadeUp>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-gray-100 border border-gray-100 rounded-2xl overflow-hidden max-w-5xl mx-auto">
+          <StaggerFadeUp className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-px bg-gray-100 border border-gray-100 rounded-2xl overflow-hidden max-w-5xl mx-auto">
             {features.map((feature) => (
-              <div key={feature.title} className="bg-white p-8">
-                <feature.icon className="w-5 h-5 text-primary mb-4" strokeWidth={1.5} />
-                <h3 className="text-gray-900 text-base font-semibold mb-2">{feature.title}</h3>
-                <p className="text-gray-500 text-[13.5px] leading-relaxed">{feature.description}</p>
-              </div>
+              <StaggerItem key={feature.title}>
+                <motion.div
+                  className="bg-white p-8 h-full cursor-default"
+                  whileHover={{ backgroundColor: "#fafafa", transition: { duration: 0.15 } }}
+                >
+                  <motion.div
+                    whileHover={{ scale: 1.15, rotate: -5 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                    className="inline-block mb-4"
+                  >
+                    <feature.icon className="w-5 h-5 text-primary" strokeWidth={1.5} />
+                  </motion.div>
+                  <h3 className="text-gray-900 text-base font-semibold mb-2">{feature.title}</h3>
+                  <p className="text-gray-500 text-[13.5px] leading-relaxed">{feature.description}</p>
+                </motion.div>
+              </StaggerItem>
             ))}
-          </div>
+          </StaggerFadeUp>
         </div>
       </section>
-      {/* How it works */}
+
+      {/* ── How it works ───────────────────────────────────────────────────── */}
       <section id="how-it-works" className="bg-gray-50 border-t border-gray-100 py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
-          <div className="text-center mb-14">
+          <FadeUp className="text-center mb-14">
             <div className="inline-block bg-emerald-50 text-primary text-[11px] font-semibold px-3 py-1 rounded-full mb-3.5 tracking-wide">
               HOW IT WORKS
             </div>
@@ -446,31 +588,40 @@ export default function LandingPage() {
             <p className="text-gray-500 text-lg max-w-md mx-auto">
               No onboarding sessions. No implementation weeks. Invite your team and go.
             </p>
-          </div>
+          </FadeUp>
 
-          <div className="relative grid grid-cols-1 md:grid-cols-3 gap-10 max-w-4xl mx-auto">
-            <div className="hidden md:block absolute top-[22px] left-[calc(16.7%+22px)] right-[calc(16.7%+22px)] h-px bg-gradient-to-r from-gray-200 via-primary to-gray-200" />
-            {steps.map((step) => (
-              <div key={step.number} className="text-center relative z-10">
-                <div
-                  className={`w-11 h-11 rounded-[10px] flex items-center justify-center mx-auto mb-4 ${
-                    step.dark ? "bg-gray-900" : "bg-primary"
-                  }`}
-                >
-                  <span className="text-white text-sm font-bold">{step.number}</span>
-                </div>
-                <h3 className="text-gray-900 text-[17px] font-semibold mb-2">{step.title}</h3>
-                <p className="text-gray-500 text-[13.5px] leading-relaxed">{step.description}</p>
-              </div>
-            ))}
+          <div className="relative max-w-4xl mx-auto">
+            <FadeUp delay={0.1}>
+              <div className="hidden md:block absolute top-[22px] left-[calc(16.7%+22px)] right-[calc(16.7%+22px)] h-px bg-gradient-to-r from-gray-200 via-primary to-gray-200" />
+            </FadeUp>
+            <StaggerFadeUp className="grid grid-cols-1 md:grid-cols-3 gap-10">
+              {steps.map((step) => (
+                <StaggerItem key={step.number}>
+                  <div className="text-center relative z-10">
+                    <motion.div
+                      className={`w-11 h-11 rounded-[10px] flex items-center justify-center mx-auto mb-4 ${
+                        step.dark ? "bg-gray-900" : "bg-primary"
+                      }`}
+                      whileHover={{ scale: 1.1, rotate: 3 }}
+                      transition={{ type: "spring", stiffness: 300, damping: 18 }}
+                    >
+                      <span className="text-white text-sm font-bold">{step.number}</span>
+                    </motion.div>
+                    <h3 className="text-gray-900 text-[17px] font-semibold mb-2">{step.title}</h3>
+                    <p className="text-gray-500 text-[13.5px] leading-relaxed">{step.description}</p>
+                  </div>
+                </StaggerItem>
+              ))}
+            </StaggerFadeUp>
           </div>
         </div>
       </section>
-      {/* Why not Deel? */}
+
+      {/* ── Why not Deel? ──────────────────────────────────────────────────── */}
       <section className="bg-gray-50 border-t border-gray-100 py-16 sm:py-20">
         <div className="max-w-5xl mx-auto px-6 lg:px-12">
           <div className="flex flex-col lg:flex-row gap-10 lg:gap-16 items-start">
-            <div className="lg:w-72 shrink-0">
+            <FadeUp className="lg:w-72 shrink-0">
               <div className="inline-block bg-emerald-50 text-primary text-[11px] font-semibold px-3 py-1 rounded-full mb-4 tracking-wide">
                 WHY NOT DEEL?
               </div>
@@ -480,8 +631,9 @@ export default function LandingPage() {
               <p className="text-gray-500 text-[14px] leading-relaxed">
                 Deel and Remote are great if you need to hire globally and convert contractors to employees. If you already have contractors and just need to run ops cleanly, you're paying for things you'll never use.
               </p>
-            </div>
-            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+            </FadeUp>
+
+            <StaggerFadeUp className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
               {[
                 {
                   icon: X,
@@ -508,91 +660,102 @@ export default function LandingPage() {
                   bad: false,
                 },
               ].map((item) => (
-                <div key={item.label} className="bg-white rounded-xl border border-gray-200 p-5">
-                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-3 ${item.bad ? "bg-red-50" : "bg-emerald-50"}`}>
-                    <item.icon className={`w-4 h-4 ${item.bad ? "text-red-500" : "text-primary"}`} strokeWidth={2.5} />
-                  </div>
-                  <div className="text-gray-900 text-[14px] font-semibold mb-1">{item.label}</div>
-                  <p className="text-gray-500 text-[13px] leading-relaxed">{item.body}</p>
-                </div>
+                <StaggerItem key={item.label}>
+                  <motion.div
+                    className="bg-white rounded-xl border border-gray-200 p-5 h-full cursor-default"
+                    whileHover={{ y: -3, boxShadow: "0 8px 24px -4px rgba(0,0,0,0.08)", transition: { duration: 0.2 } }}
+                  >
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center mb-3 ${item.bad ? "bg-red-50" : "bg-emerald-50"}`}>
+                      <item.icon className={`w-4 h-4 ${item.bad ? "text-red-500" : "text-primary"}`} strokeWidth={2.5} />
+                    </div>
+                    <div className="text-gray-900 text-[14px] font-semibold mb-1">{item.label}</div>
+                    <p className="text-gray-500 text-[13px] leading-relaxed">{item.body}</p>
+                  </motion.div>
+                </StaggerItem>
               ))}
-            </div>
+            </StaggerFadeUp>
           </div>
         </div>
       </section>
 
-      {/* Pricing */}
+      {/* ── Pricing ────────────────────────────────────────────────────────── */}
       <section id="pricing" className="bg-white border-t border-gray-100 py-20 sm:py-24">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
-          <div className="text-center mb-14">
+          <FadeUp className="text-center mb-14">
             <div className="inline-block bg-emerald-50 text-primary text-[11px] font-semibold px-3 py-1 rounded-full mb-3.5 tracking-wide">
               PRICING
             </div>
             <h2 className="font-serif font-normal text-gray-900 text-3xl sm:text-4xl mb-3">Pay only for the ICs you have</h2>
             <p className="text-gray-500 text-lg">No seat bundles. No surprises. Start free for 7 days.</p>
-          </div>
+          </FadeUp>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
+          <StaggerFadeUp className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
             {plans.map((plan) => {
               const planKey = plan.name.toLowerCase() as string;
               const override = PLAN_PRICE_OVERRIDES[detectedCurrency]?.[planKey];
               const displayPrice = override?.price ?? plan.price;
               const displayExample = override?.example ?? plan.example;
               return (
-              <div
-                key={plan.name}
-                className={`relative rounded-2xl p-7 flex flex-col ${
-                  plan.highlight
-                    ? "bg-gray-900 border border-gray-900"
-                    : "bg-white border-[1.5px] border-gray-200"
-                }`}
-              >
-                {plan.highlight && (
-                  <div className="absolute top-3.5 right-3.5 bg-emerald-500 text-white text-[9.5px] font-bold px-2.5 py-1 rounded-full tracking-wide">
-                    BEST VALUE
-                  </div>
-                )}
-                <div className={`text-[15px] font-semibold mb-1 ${plan.highlight ? "text-white" : "text-gray-900"}`}>
-                  {plan.name}
-                </div>
-                <div className={`text-[13px] mb-6 ${plan.highlight ? "text-white/50" : "text-gray-500"}`}>{plan.tagline}</div>
-                <div className={`text-[38px] font-bold mb-0.5 tracking-tight leading-none ${plan.highlight ? "text-white" : "text-gray-900"}`}>
-                  {displayPrice}
-                </div>
-                <div className={`text-xs mb-1 ${plan.highlight ? "text-white/40" : "text-gray-400"}`}>{plan.priceNote}</div>
-                <div className={`text-[11px] mb-1 font-medium ${plan.highlight ? "text-emerald-400" : "text-primary"}`}>{plan.seats}</div>
-                <div className={`text-[11px] mb-4 ${plan.highlight ? "text-white/30" : "text-gray-400"}`}>{displayExample}</div>
-                <Button
-                  className="mb-5 w-full"
-                  variant={plan.highlight ? "default" : "secondary"}
-                  onClick={() => {
-                    if (plan.enterprise) {
-                      window.open("mailto:sales@axlehq.app");
-                    } else if (isSubdomainMode()) {
-                      window.location.href =
-                        planKey === "free"
-                          ? `${getMarketingOrigin()}/signup`
-                          : `${getMarketingOrigin()}/signup?plan=${planKey}`;
-                    } else {
-                      setLocation(planKey === "free" ? "/signup" : `/signup?plan=${planKey}`);
+                <StaggerItem key={plan.name}>
+                  <motion.div
+                    className={`relative rounded-2xl p-7 flex flex-col h-full ${
+                      plan.highlight
+                        ? "bg-gray-900 border border-gray-900"
+                        : "bg-white border-[1.5px] border-gray-200"
+                    }`}
+                    whileHover={
+                      plan.highlight
+                        ? { scale: 1.02, transition: { duration: 0.2 } }
+                        : { y: -4, boxShadow: "0 12px 32px -6px rgba(0,0,0,0.10)", transition: { duration: 0.2 } }
                     }
-                  }}
-                  data-testid={`button-plan-${planKey}`}
-                >
-                  {plan.cta}
-                </Button>
-                <div className="flex flex-col gap-2">
-                  {plan.features.map((feat) => (
-                    <div key={feat} className="flex items-center gap-2">
-                      <Check className={`w-3.5 h-3.5 shrink-0 ${plan.highlight ? "text-emerald-400" : "text-primary"}`} strokeWidth={2.5} />
-                      <span className={`text-[13px] ${plan.highlight ? "text-white/65" : "text-gray-500"}`}>{feat}</span>
+                  >
+                    {plan.highlight && (
+                      <div className="absolute top-3.5 right-3.5 bg-emerald-500 text-white text-[9.5px] font-bold px-2.5 py-1 rounded-full tracking-wide">
+                        BEST VALUE
+                      </div>
+                    )}
+                    <div className={`text-[15px] font-semibold mb-1 ${plan.highlight ? "text-white" : "text-gray-900"}`}>
+                      {plan.name}
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-          </div>
+                    <div className={`text-[13px] mb-6 ${plan.highlight ? "text-white/50" : "text-gray-500"}`}>{plan.tagline}</div>
+                    <div className={`text-[38px] font-bold mb-0.5 tracking-tight leading-none ${plan.highlight ? "text-white" : "text-gray-900"}`}>
+                      {displayPrice}
+                    </div>
+                    <div className={`text-xs mb-1 ${plan.highlight ? "text-white/40" : "text-gray-400"}`}>{plan.priceNote}</div>
+                    <div className={`text-[11px] mb-1 font-medium ${plan.highlight ? "text-emerald-400" : "text-primary"}`}>{plan.seats}</div>
+                    <div className={`text-[11px] mb-4 ${plan.highlight ? "text-white/30" : "text-gray-400"}`}>{displayExample}</div>
+                    <Button
+                      className="mb-5 w-full"
+                      variant={plan.highlight ? "default" : "secondary"}
+                      onClick={() => {
+                        if (plan.enterprise) {
+                          window.open("mailto:sales@axlehq.app");
+                        } else if (isSubdomainMode()) {
+                          window.location.href =
+                            planKey === "free"
+                              ? `${getMarketingOrigin()}/signup`
+                              : `${getMarketingOrigin()}/signup?plan=${planKey}`;
+                        } else {
+                          setLocation(planKey === "free" ? "/signup" : `/signup?plan=${planKey}`);
+                        }
+                      }}
+                      data-testid={`button-plan-${planKey}`}
+                    >
+                      {plan.cta}
+                    </Button>
+                    <div className="flex flex-col gap-2">
+                      {plan.features.map((feat) => (
+                        <div key={feat} className="flex items-center gap-2">
+                          <Check className={`w-3.5 h-3.5 shrink-0 ${plan.highlight ? "text-emerald-400" : "text-primary"}`} strokeWidth={2.5} />
+                          <span className={`text-[13px] ${plan.highlight ? "text-white/65" : "text-gray-500"}`}>{feat}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                </StaggerItem>
+              );
+            })}
+          </StaggerFadeUp>
 
           {/* Pricing calculator */}
           {(() => {
@@ -602,89 +765,98 @@ export default function LandingPage() {
             const isUsd = calculatorCurrency === "USD";
 
             return (
-              <div className="mt-12 max-w-2xl mx-auto bg-gray-50 border border-gray-200 rounded-2xl p-7">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-                  <div>
-                    <p className="text-gray-900 text-[15px] font-semibold mb-0.5">How much could you save?</p>
-                    <p className="text-gray-500 text-[13px]">Compare your cost on Axle vs Deel at your team size.</p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="contractor-count" className="text-gray-600 text-[13px] whitespace-nowrap">Number of contractors:</label>
-                      <input
-                        id="contractor-count"
-                        type="number"
-                        min={1}
-                        max={500}
-                        value={contractorCount}
-                        onChange={(e) => setContractorCount(Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
-                        className="w-16 text-center border border-gray-300 rounded-lg px-2 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
-                        data-testid="input-contractor-count"
-                      />
+              <FadeUp delay={0.15}>
+                <div className="mt-12 max-w-2xl mx-auto bg-gray-50 border border-gray-200 rounded-2xl p-7">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                    <div>
+                      <p className="text-gray-900 text-[15px] font-semibold mb-0.5">How much could you save?</p>
+                      <p className="text-gray-500 text-[13px]">Compare your cost on Axle vs Deel at your team size.</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <label htmlFor="calculator-currency" className="text-gray-600 text-[13px] whitespace-nowrap">Currency:</label>
-                      <select
-                        id="calculator-currency"
-                        value={calculatorCurrency}
-                        onChange={(e) => {
-                          setCalculatorCurrency(e.target.value);
-                          setCalculatorCurrencyTouched(true);
-                        }}
-                        className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
-                        data-testid="select-calculator-currency"
-                      >
-                        {Object.entries(CALCULATOR_CURRENCIES).map(([code, c]) => (
-                          <option key={code} value={code}>{c.label}</option>
-                        ))}
-                      </select>
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <label htmlFor="contractor-count" className="text-gray-600 text-[13px] whitespace-nowrap">Number of contractors:</label>
+                        <input
+                          id="contractor-count"
+                          type="number"
+                          min={1}
+                          max={500}
+                          value={contractorCount}
+                          onChange={(e) => setContractorCount(Math.max(1, Math.min(500, parseInt(e.target.value) || 1)))}
+                          className="w-16 text-center border border-gray-300 rounded-lg px-2 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+                          data-testid="input-contractor-count"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label htmlFor="calculator-currency" className="text-gray-600 text-[13px] whitespace-nowrap">Currency:</label>
+                        <select
+                          id="calculator-currency"
+                          value={calculatorCurrency}
+                          onChange={(e) => {
+                            setCalculatorCurrency(e.target.value);
+                            setCalculatorCurrencyTouched(true);
+                          }}
+                          className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
+                          data-testid="select-calculator-currency"
+                        >
+                          {Object.entries(CALCULATOR_CURRENCIES).map(([code, c]) => (
+                            <option key={code} value={code}>{c.label}</option>
+                          ))}
+                        </select>
+                      </div>
                     </div>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Axle Pro</div>
+                      <div className="text-2xl font-bold text-gray-900 mb-0.5">{calc.symbol}{axleTotal.toLocaleString()}<span className="text-sm font-normal text-gray-400"> {calc.label}/mo</span></div>
+                      <div className="text-[12px] text-gray-500">{contractorCount} ICs × {calc.symbol}{calc.axleProUnit.toLocaleString()}</div>
+                    </div>
+                    <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
+                      <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Deel</div>
+                      <div className="text-2xl font-bold text-gray-400 mb-0.5">${deelTotalUsd.toLocaleString()}<span className="text-sm font-normal text-gray-400"> USD/mo</span></div>
+                      <div className="text-[12px] text-gray-500">{contractorCount} ICs × $49</div>
+                    </div>
+                  </div>
+                  {isUsd ? (
+                    <div className="mt-4 bg-emerald-50 rounded-xl border border-emerald-100 px-5 py-3 flex items-center justify-between">
+                      <span className="text-[13px] text-emerald-800 font-medium">Your annual saving with Axle</span>
+                      <span className="text-emerald-700 font-bold text-[17px]">${((deelTotalUsd - axleTotal) * 12).toLocaleString()} USD / year</span>
+                    </div>
+                  ) : (
+                    <div className="mt-4 bg-emerald-50 rounded-xl border border-emerald-100 px-5 py-3">
+                      <span className="text-[13px] text-emerald-800 font-medium">Axle's {calc.label} pricing is Axle's real published rate for your region — Deel doesn't publish {calc.label} pricing and bills internationally in USD, so switch to USD above for a direct dollar comparison.</span>
+                    </div>
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-3 text-center">
+                    Axle pricing shown in {calc.label} is Axle's real published rate, not a currency conversion. Deel figures reflect Deel's published $49/IC/month USD price.
+                  </p>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-                    <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Axle Pro</div>
-                    <div className="text-2xl font-bold text-gray-900 mb-0.5">{calc.symbol}{axleTotal.toLocaleString()}<span className="text-sm font-normal text-gray-400"> {calc.label}/mo</span></div>
-                    <div className="text-[12px] text-gray-500">{contractorCount} ICs × {calc.symbol}{calc.axleProUnit.toLocaleString()}</div>
-                  </div>
-                  <div className="bg-white rounded-xl border border-gray-200 p-4 text-center">
-                    <div className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1">Deel</div>
-                    <div className="text-2xl font-bold text-gray-400 mb-0.5">${deelTotalUsd.toLocaleString()}<span className="text-sm font-normal text-gray-400"> USD/mo</span></div>
-                    <div className="text-[12px] text-gray-500">{contractorCount} ICs × $49</div>
-                  </div>
-                </div>
-                {isUsd ? (
-                  <div className="mt-4 bg-emerald-50 rounded-xl border border-emerald-100 px-5 py-3 flex items-center justify-between">
-                    <span className="text-[13px] text-emerald-800 font-medium">Your annual saving with Axle</span>
-                    <span className="text-emerald-700 font-bold text-[17px]">${((deelTotalUsd - axleTotal) * 12).toLocaleString()} USD / year</span>
-                  </div>
-                ) : (
-                  <div className="mt-4 bg-emerald-50 rounded-xl border border-emerald-100 px-5 py-3">
-                    <span className="text-[13px] text-emerald-800 font-medium">Axle's {calc.label} pricing is Axle's real published rate for your region — Deel doesn't publish {calc.label} pricing and bills internationally in USD, so switch to USD above for a direct dollar comparison.</span>
-                  </div>
-                )}
-                <p className="text-[11px] text-gray-400 mt-3 text-center">
-                  Axle pricing shown in {calc.label} is Axle's real published rate, not a currency conversion. Deel figures reflect Deel's published $49/IC/month USD price.
-                </p>
-              </div>
+              </FadeUp>
             );
           })()}
         </div>
       </section>
-      {/* CTA dark */}
+
+      {/* ── CTA dark ───────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden bg-sidebar py-20 sm:py-24 text-center">
         <div
           className="absolute inset-0 pointer-events-none"
           style={{ backgroundImage: darkDotBg, backgroundSize: "28px 28px" }}
         />
-        <div className="relative max-w-2xl mx-auto px-6">
+        <FadeUp className="relative max-w-2xl mx-auto px-6">
           <h2 className="font-serif font-normal text-gray-50 text-4xl sm:text-5xl mb-4">
             Ready to bring order to contractor ops?
           </h2>
           <p className="text-gray-400 text-lg leading-relaxed mb-9 max-w-lg mx-auto">
             Run your contractor operations without the spreadsheet chaos.
           </p>
-          <div className="flex flex-wrap items-center justify-center gap-3.5">
+          <motion.div
+            className="flex flex-wrap items-center justify-center gap-3.5"
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-60px 0px" }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1], delay: 0.15 }}
+          >
             <Button
               size="lg"
               onClick={() => {
@@ -708,11 +880,12 @@ export default function LandingPage() {
             >
               Book a demo
             </Button>
-          </div>
+          </motion.div>
           <p className="text-gray-600 text-xs mt-4">No credit card required. 7-day free trial, up to 3 contractors.</p>
-        </div>
+        </FadeUp>
       </section>
-      {/* Footer */}
+
+      {/* ── Footer ─────────────────────────────────────────────────────────── */}
       <footer className="bg-[#0A0D12] border-t border-white/[0.04] py-12">
         <div className="max-w-7xl mx-auto px-6 lg:px-12">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-10 mb-9">
