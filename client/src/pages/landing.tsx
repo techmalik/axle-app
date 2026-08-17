@@ -942,7 +942,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-white/[0.04] pt-5 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span className="text-gray-600 text-xs">© {new Date().getFullYear()} Axle. All rights reserved.</span>
+            <span className="text-gray-600 text-xs">© {new Date().getFullYear()} Northpoint Technologies Ltd. All rights reserved.</span>
             <span className="text-gray-600 text-xs">Built for teams that run on contractors</span>
           </div>
         </div>
