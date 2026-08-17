@@ -123,6 +123,41 @@ const loginAttempts = new Map<string, { count: number; lastAttempt: number }>();
 const RATE_LIMIT_WINDOW = 60000; // 1 minute
 const MAX_LOGIN_ATTEMPTS = 5;
 
+// Separate rate limiter for onboarding requests — 3 per hour per client IP.
+// Express is configured with "trust proxy: true" so req.ip is the client address
+// as reported by Replit's reverse proxy (derived from the trusted X-Forwarded-For
+// chain), not the raw socket peer.  We use that here, consistent with how the
+// login limiter works throughout the rest of the app.
+//
+// The map is hard-bounded: when the cap is reached we evict expired entries first;
+// if none have expired we reject the request (429) rather than letting the map grow.
+const onboardingAttempts = new Map<string, { count: number; windowStart: number }>();
+const ONBOARDING_RATE_WINDOW = 60 * 60 * 1000; // 1 hour
+const MAX_ONBOARDING_ATTEMPTS = 3;
+const MAX_ONBOARDING_MAP_SIZE = 10_000;
+
+function checkOnboardingRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = onboardingAttempts.get(ip);
+  if (!entry || now - entry.windowStart > ONBOARDING_RATE_WINDOW) {
+    if (!entry && onboardingAttempts.size >= MAX_ONBOARDING_MAP_SIZE) {
+      // Evict expired entries to reclaim capacity.
+      Array.from(onboardingAttempts.entries()).forEach(([k, v]) => {
+        if (now - v.windowStart > ONBOARDING_RATE_WINDOW) {
+          onboardingAttempts.delete(k);
+        }
+      });
+      // Hard cap: if nothing was evicted, reject rather than exceed the bound.
+      if (onboardingAttempts.size >= MAX_ONBOARDING_MAP_SIZE) return false;
+    }
+    onboardingAttempts.set(ip, { count: 1, windowStart: now });
+    return true;
+  }
+  if (entry.count >= MAX_ONBOARDING_ATTEMPTS) return false;
+  entry.count++;
+  return true;
+}
+
 const MIN_PASSWORD_LENGTH = 10;
 
 function checkRateLimit(ip: string): boolean {
@@ -458,7 +493,7 @@ import {
   notifyEvaluationOutcome,
   createNotification,
 } from "./notificationService";
-import { sendPasswordResetEmail, sendBillingEmail, sendSupportTicketEmail } from "./emailService";
+import { sendPasswordResetEmail, sendBillingEmail, sendSupportTicketEmail, sendOnboardingRequestEmail } from "./emailService";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -469,6 +504,51 @@ export async function registerRoutes(
 
   // Migration file upload route - admin only
   app.use(createMigrateFilesRouter(boAuthMiddleware, requirePlatformAdmin));
+
+  // Public onboarding request endpoint — no auth required
+  app.post("/api/onboarding-request", asyncHandler(async (req, res) => {
+    // req.ip is derived from the trusted X-Forwarded-For chain (Express trust proxy
+    // is enabled) so it represents the actual client address as seen by Replit's proxy.
+    const clientIp = getClientIp(req);
+    if (!checkOnboardingRateLimit(clientIp)) {
+      return res.status(429).json({ error: "Too many requests. Please try again later." });
+    }
+
+    const { z } = await import("zod");
+    // Trim before validating so whitespace-only inputs fail required checks.
+    const trimmedStr = (min: number, minMsg: string, max: number) =>
+      z.preprocess(
+        (v) => (typeof v === "string" ? v.trim() : v),
+        z.string().min(min, minMsg).max(max)
+      );
+    const schema = z.object({
+      firstName: trimmedStr(1, "First name is required", 100),
+      lastName: trimmedStr(1, "Last name is required", 100),
+      email: z.preprocess(
+        (v) => (typeof v === "string" ? v.trim() : v),
+        z.string().email("Valid email is required").max(254)
+      ),
+      orgName: trimmedStr(1, "Organization name is required", 200),
+      companySize: z.enum(["1–10", "11–50", "51–200", "200+"], {
+        required_error: "Company size is required",
+      }),
+      message: z.preprocess(
+        (v) => (typeof v === "string" ? v.trim() : v),
+        z.string().max(2000).optional()
+      ),
+    });
+
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.errors[0]?.message || "Invalid request" });
+    }
+
+    const ok = await sendOnboardingRequestEmail(parsed.data);
+    if (!ok) {
+      return res.status(500).json({ error: "Failed to send request. Please try again." });
+    }
+    return res.json({ success: true });
+  }));
 
   // Public health check endpoint — returns DB and storage connectivity status
   app.get("/api/health", asyncHandler(async (req, res) => {
@@ -668,18 +748,13 @@ export async function registerRoutes(
     res.json({ ...userWithoutPassword, hasDirectReports, isPlatformAdmin: loginIsPlatformAdmin, trialExpired: loginTrialExpired });
   });
 
-  app.post("/api/auth/register", async (req, res) => {
+  // Back-office provisioning: restricted to platform admins only.
+  // Public self-serve registration has been replaced by /api/onboarding-request.
+  app.post("/api/auth/register", boAuthMiddleware, requirePlatformAdmin, async (req, res) => {
     const { firstName, lastName, email, password, organizationName } = req.body;
 
     if (!firstName || !lastName || !email || !password || !organizationName) {
       return res.status(400).json({ error: "All fields are required: firstName, lastName, email, password, organizationName" });
-    }
-
-    // Org-creation is unthrottled otherwise — key on ip+email so spamming
-    // signups against one address (or one target email) gets rate-limited.
-    const rateLimitKey = `register:${getClientIp(req)}:${String(email).toLowerCase()}`;
-    if (!checkRateLimit(rateLimitKey)) {
-      return res.status(429).json({ error: "Too many registration attempts. Please wait 1 minute." });
     }
 
     if (password.length < MIN_PASSWORD_LENGTH) {

@@ -26,9 +26,9 @@ const PUBLIC_ROUTE_META: Record<string, RouteMeta> = {
     ogImage: DEFAULT_OG_IMAGE,
   },
   "/signup": {
-    title: "Start your free trial — Axle",
+    title: "Request access — Axle",
     description:
-      "Create your Axle account and start managing independent contractors with timesheets, invoices, and performance reviews. Free plan available.",
+      "Request access to Axle and get your account set up by our team. Manage independent contractors with timesheets, invoices, and performance reviews.",
     canonical: `${SITE_URL}/signup`,
     ogImage: DEFAULT_OG_IMAGE,
   },

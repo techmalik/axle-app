@@ -96,7 +96,7 @@ const plans = [
     priceNote: "7-day trial",
     seats: "Up to 3 contractors",
     example: "3 ICs = $0",
-    cta: "Start free trial",
+    cta: "Request access",
     highlight: false,
     enterprise: false,
     features: ["Timesheet management", "Leave tracking", "Basic invoicing", "1 admin seat"],
@@ -108,7 +108,7 @@ const plans = [
     priceNote: "per IC / month",
     seats: "Up to 25 contractors",
     example: "10 ICs = $90/mo",
-    cta: "Start free trial",
+    cta: "Request access",
     highlight: false,
     enterprise: false,
     features: ["Everything in Free", "Unlimited admin seats", "CSV + PDF exports", "Email notifications"],
@@ -120,7 +120,7 @@ const plans = [
     priceNote: "per IC / month",
     seats: "Up to 100 contractors",
     example: "25 ICs = $350/mo",
-    cta: "Start free trial",
+    cta: "Request access",
     highlight: true,
     enterprise: false,
     features: ["Everything in Starter", "Performance evaluations", "Expense tracking", "Audit-ready exports"],
@@ -290,7 +290,7 @@ export default function LandingPage() {
                 }}
                 data-testid="button-hero-get-started"
               >
-                Start free trial
+                Request access
                 <ArrowRight className="ml-1.5 h-4 w-4" />
               </Button>
               <Button size="lg" variant="outline" onClick={scrollToHowItWorks} data-testid="button-hero-demo">

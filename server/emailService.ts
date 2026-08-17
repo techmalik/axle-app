@@ -482,6 +482,99 @@ export async function sendSupportTicketEmail(
   }
 }
 
+// Sends a notification to the platform admin when a new onboarding request is submitted.
+export async function sendOnboardingRequestEmail(data: {
+  firstName: string;
+  lastName: string;
+  email: string;
+  orgName: string;
+  companySize: string;
+  message?: string;
+}): Promise<boolean> {
+  if (!resend) {
+    console.log("[EMAIL] Onboarding request email skipped — RESEND_API_KEY not set");
+    return false;
+  }
+
+  // Derive recipients from PLATFORM_ADMIN_EMAILS. Falls back to the configured
+  // support address when the variable is absent so requests are never silently
+  // lost during initial deployment. Set PLATFORM_ADMIN_EMAILS in production to
+  // route requests to the correct team member(s).
+  const adminEmails = (process.env.PLATFORM_ADMIN_EMAILS || "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+  const recipients = adminEmails.length > 0 ? adminEmails : [SUPPORT_EMAIL];
+  console.log(`[EMAIL] Onboarding request recipients: ${recipients.join(", ")}`);
+  const subject = `New onboarding request — ${data.orgName}`;
+
+  const rows = [
+    ["First name", data.firstName],
+    ["Last name", data.lastName],
+    ["Work email", data.email],
+    ["Organization", data.orgName],
+    ["Company size", data.companySize],
+    ...(data.message ? [["Additional notes", data.message]] : []),
+  ];
+
+  const tableRows = rows
+    .map(
+      ([k, v]) =>
+        `<tr><td style="padding:6px 16px 6px 0;color:#71717a;font-size:14px;font-weight:500;white-space:nowrap;vertical-align:top;">${k}:</td><td style="padding:6px 0;color:#18181b;font-size:14px;">${String(v).replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td></tr>`
+    )
+    .join("");
+
+  const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;background-color:#f4f4f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f4f5;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="100%" style="max-width:600px;background-color:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+        <tr><td style="background-color:${BRAND_COLOR};padding:32px;text-align:center;">
+          <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.025em;">${APP_NAME}</h1>
+        </td></tr>
+        <tr><td style="padding:32px 32px 0;">
+          <span style="display:inline-block;background-color:#6366F115;color:#6366F1;padding:6px 12px;border-radius:4px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">New Request</span>
+        </td></tr>
+        <tr><td style="padding:24px 32px;">
+          <h2 style="margin:0 0 8px;color:#18181b;font-size:22px;font-weight:600;">New onboarding request</h2>
+          <p style="margin:0 0 20px;color:#52525b;font-size:15px;line-height:1.6;">A prospective customer has requested access to ${APP_NAME}. Review the details below and provision their account when ready.</p>
+          <table style="border-collapse:collapse;width:100%;">${tableRows}</table>
+        </td></tr>
+        <tr><td style="background-color:#fafafa;padding:24px 32px;border-top:1px solid #e4e4e7;">
+          <p style="margin:0;color:#a1a1aa;font-size:12px;line-height:1.5;">Reply to this email to contact the applicant at ${data.email}.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+
+  const textRows = rows.map(([k, v]) => `${k}: ${v}`).join("\n");
+  const text = `New onboarding request — ${data.orgName}\n\n${textRows}\n\n---\nReply to this email to contact the applicant at ${data.email}.`;
+
+  try {
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
+      to: recipients,
+      replyTo: data.email,
+      subject,
+      html,
+      text,
+    });
+    if (result.error) {
+      console.error("[EMAIL] Onboarding request email failed:", result.error);
+      return false;
+    }
+    console.log(`[EMAIL] Onboarding request email sent for ${data.orgName} (${data.email})`);
+    return true;
+  } catch (error) {
+    console.error("[EMAIL] Onboarding request email error:", error);
+    return false;
+  }
+}
+
 // Sends a transactional billing email directly to an address (no preference check —
 // billing notifications are mandatory and cannot be opted out of).
 export async function sendBillingEmail(
